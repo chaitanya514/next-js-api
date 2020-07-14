@@ -1,4 +1,6 @@
 import Head from 'next/head';
+import React from "react";
+import { useState, useEffect } from 'react';
 import fetch from 'isomorphic-unfetch';
 
 
@@ -18,8 +20,66 @@ export async function getServerSideProps() {
 
 export default function Home({ data }) {
   console.log('data', data)
+  const { info, results: defaultResults = [] } = data;
+  const [results, updateResults] = useState(defaultResults);
+  const [page, updatePage] = useState({
+    ...info,
+    current: defaultEndpoint
+  });
+  const { current } = page;
 
-  const {results=[]}=data;
+  useEffect(() => {
+    if (current === defaultEndpoint) return;
+
+    async function request() {
+      const res = await fetch(current)
+      const nextData = await res.json();
+
+      updatePage({
+        current,
+        ...nextData.info
+      });
+
+      if (!nextData.info?.prev) {
+        updateResults(nextData.results);
+        return;
+      }
+
+      updateResults(prev => {
+        return [
+          ...prev,
+          ...nextData.results
+        ]
+      });
+    }
+
+    request();
+  }, [current]);
+
+  function handleLoadMore() {
+    updatePage(prev => {
+      return {
+        ...prev,
+        current: page?.next
+      }
+    });
+  }
+
+  function handleOnSubmitSearch(e) {
+    e.preventDefault();
+  
+    const { currentTarget = {} } = e;
+    const fields = Array.from(currentTarget?.elements);
+    const fieldQuery = fields.find(field => field.name === 'query');
+  
+    const value = fieldQuery.value || '';
+    const endpoint = `https://rickandmortyapi.com/api/character/?name=${value}`;
+  
+    updatePage({
+      current: endpoint
+    });
+  }
+  
   return (
     <div className="container">
       <Head>
@@ -32,38 +92,34 @@ export default function Home({ data }) {
         </h1>
 
         <p className="description">
-          Rick and Morty Character 
+          Rick and Morty Character
         </p>
 
+        <form className="search"  onSubmit={handleOnSubmitSearch}>
+          <input name="query" type="search" />
+          <button>Search</button>
+        </form>
+
         <ul className="grid">
-          {results.map(result=>{
-            const { id, name,image }= result;
-          return(
-            <li className="card" key={id}>
-            <a href="#">
-          
-            <img src={image} alt={`${name} Thumbnail`} />
-          <h3>{name}</h3>
-            
-           
-            </a>
-          </li>
-          )  
+          {results.map(result => {
+            const { id, name, image } = result;
+            return (
+              <li className="card" key={id}>
+                <a href="#">
+                  <img src={image} alt={`${name} Thumbnail`} />
+                  <h3>{name}</h3>
+                </a>
+              </li>
+            )
           })}
-         
+
         </ul>
       </main>
 
-      <footer>
-        <a
-          href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Powered by{' '}
-          <img src="/vercel.svg" alt="Vercel Logo" className="logo" />
-        </a>
-      </footer>
+      <p>
+        <button onClick={handleLoadMore}>Load More</button>
+      </p>
+
 
       <style jsx>{`
         .container {
@@ -196,6 +252,22 @@ export default function Home({ data }) {
             flex-direction: column;
           }
         }
+
+        .search input {
+          margin-right: .5em;
+        }
+        
+        @media (max-width: 600px) {
+          .search input {
+            margin-right: 0;
+            margin-bottom: .5em;
+          }
+        
+          .search input,
+          .search button {
+            width: 100%;
+          }
+        }
       `}</style>
 
       <style jsx global>{`
@@ -211,6 +283,7 @@ export default function Home({ data }) {
         * {
           box-sizing: border-box;
         }
+        
       `}</style>
     </div>
   )
